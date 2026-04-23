@@ -1,0 +1,16 @@
+[Unit]
+Description=Research Hub Next.js app
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/research-hub/current
+EnvironmentFile=/etc/research-hub.env
+ExecStart=/usr/bin/npm run start -- --hostname 127.0.0.1 --port 3000
+Restart=always
+RestartSec=5
+User=www-data
+Group=www-data
+
+[Install]
+WantedBy=multi-user.target

@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Research Hub
 
-## Getting Started
+Research Hub is a Next.js 16 + Supabase application for publishing and browsing research resources. The current product centers on resource cards, author pages, comments, and bookmarks.
 
-First, run the development server:
+## Local Development
+
+Install dependencies and start the app:
 
 ```bash
+npm ci
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Required Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Create a local `.env.local` with:
 
-## Learn More
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+AUTH_GITHUB_ID=
+AUTH_GITHUB_SECRET=
+NEXTAUTH_URL=http://localhost:3000
+AUTH_SECRET=
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Database Setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Apply [`supabase-schema.sql`](./supabase-schema.sql) in the Supabase SQL editor before testing the resource-center APIs.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Verification
 
-## Deploy on Vercel
+Run the same checks used by CI:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm test -- src/lib/resource-form.test.ts src/lib/resource-queries.test.ts
+npm run lint
+npm run build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Hong Kong Deployment
+
+Deployment targets a Tencent Cloud Hong Kong VM with Nginx + systemd.
+
+- GitHub Actions workflow: [`.github/workflows/deploy-hk.yml`](./.github/workflows/deploy-hk.yml)
+- Nginx example: [`deploy/nginx.research-hub.conf`](./deploy/nginx.research-hub.conf)
+- systemd unit: [`deploy/research-hub.service`](./deploy/research-hub.service)
+
+### GitHub Secrets
+
+The workflow expects these repository secrets:
+
+- `HK_SSH_HOST`
+- `HK_SSH_USER`
+- `HK_SSH_KEY`
+- `HK_APP_DIR`
+
+### Server Layout
+
+- Application path: `/srv/research-hub/current`
+- Environment file: `/etc/research-hub.env`
+- systemd service name: `research-hub`
+
+### Initial Server Bootstrapping
+
+1. Copy `deploy/research-hub.service` to `/etc/systemd/system/research-hub.service`
+2. Copy `deploy/nginx.research-hub.conf` into Nginx sites config and enable it
+3. Create `/etc/research-hub.env` with the production environment variables
+4. Run `sudo systemctl daemon-reload`
+5. Run `sudo systemctl enable research-hub`
+6. Provision TLS for `yuuri.cn` and `www.yuuri.cn`
+
+After that, pushing to `main` triggers CI validation and remote deployment.

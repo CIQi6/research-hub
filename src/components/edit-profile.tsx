@@ -17,6 +17,8 @@ export function EditProfile() {
   const [editingResource, setEditingResource] = useState<ResourceSummary | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [resourceSaving, setResourceSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [resourceError, setResourceError] = useState("");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -53,37 +55,54 @@ export function EditProfile() {
 
   async function handleProfileSave() {
     setProfileSaving(true);
-    const res = await fetch("/api/members", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ field }),
-    });
+    setProfileError("");
 
-    setProfileSaving(false);
+    try {
+      const res = await fetch("/api/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field }),
+      });
 
-    if (res.ok) {
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        setProfileError(payload?.error ?? "Profile update failed");
+        return;
+      }
+
       router.refresh();
+    } finally {
+      setProfileSaving(false);
     }
   }
 
   async function handleResourceSubmit(value: ResourceEditorValue) {
     setResourceSaving(true);
+    setResourceError("");
     const endpoint = editingResource
       ? `/api/resources/${editingResource.id}`
       : "/api/resources";
     const method = editingResource ? "PATCH" : "POST";
 
-    const response = await fetch(endpoint, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(value),
-    });
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(value),
+      });
 
-    setResourceSaving(false);
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        setResourceError(payload?.error ?? "Resource publish failed");
+        return;
+      }
 
-    if (response.ok) {
       setEditingResource(null);
       await reloadResources();
+    } finally {
+      setResourceSaving(false);
     }
   }
 
@@ -130,6 +149,9 @@ export function EditProfile() {
             {profileSaving ? "Saving..." : "Save profile"}
           </Button>
         </div>
+        {profileError ? (
+          <p className="mt-3 text-sm text-destructive">{profileError}</p>
+        ) : null}
       </div>
 
       <ResourceEditor
@@ -152,6 +174,9 @@ export function EditProfile() {
         onSubmit={handleResourceSubmit}
         onCancel={editingResource ? () => setEditingResource(null) : undefined}
       />
+      {resourceError ? (
+        <p className="-mt-4 text-sm text-destructive">{resourceError}</p>
+      ) : null}
 
       <div className="space-y-4">
         <div>

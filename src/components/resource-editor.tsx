@@ -66,6 +66,7 @@ export function ResourceEditor({
           <div className="grid gap-4 md:grid-cols-[1.6fr_0.8fr]">
             <Input
               placeholder="Resource title"
+              required
               value={value.title}
               onChange={(event) =>
                 setValue((current) => ({ ...current, title: event.target.value }))
@@ -79,6 +80,7 @@ export function ResourceEditor({
 
           <Input
             placeholder="https://..."
+            required
             value={value.url}
             onChange={(event) =>
               setValue((current) => ({ ...current, url: event.target.value }))

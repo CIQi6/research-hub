@@ -40,36 +40,36 @@ npm run lint
 npm run build
 ```
 
-## Hong Kong Deployment
+## Vercel Deployment
 
-Deployment targets a Tencent Cloud Hong Kong VM with Nginx + systemd.
+Production deployment now targets Vercel. The repository keeps a lightweight GitHub Actions CI workflow for tests, lint, and build checks only.
 
-- GitHub Actions workflow: [`.github/workflows/deploy-hk.yml`](./.github/workflows/deploy-hk.yml)
-- Nginx example: [`deploy/nginx.research-hub.conf`](./deploy/nginx.research-hub.conf)
-- systemd unit: [`deploy/research-hub.service`](./deploy/research-hub.service)
+- CI workflow: [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)
+- Deployment runbook: [`docs/vercel-deployment.md`](./docs/vercel-deployment.md)
 
-### GitHub Secrets
+### Required Vercel Environment Variables
 
-The workflow expects these repository secrets:
+Configure these in the Vercel project for `Production`, `Preview`, and `Development`:
 
-- `HK_SSH_HOST`
-- `HK_SSH_USER`
-- `HK_SSH_KEY`
-- `HK_APP_DIR`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `AUTH_GITHUB_ID`
+- `AUTH_GITHUB_SECRET`
+- `AUTH_SECRET`
+- `NEXTAUTH_URL`
 
-### Server Layout
+For production, set `NEXTAUTH_URL` to the primary domain you choose on Vercel. The runbook uses `https://www.yuuri.cn` as the primary domain and redirects `https://yuuri.cn` to it.
 
-- Application path: `/srv/research-hub/current`
-- Environment file: `/etc/research-hub.env`
-- systemd service name: `research-hub`
+### Production Setup Checklist
 
-### Initial Server Bootstrapping
+1. Push this repository to GitHub.
+2. Import the GitHub repository into Vercel as a Next.js project.
+3. Add the environment variables above in Vercel Project Settings.
+4. Update the GitHub OAuth App:
+   - Homepage URL: `https://www.yuuri.cn`
+   - Authorization callback URL: `https://www.yuuri.cn/api/auth/callback/github`
+5. Add both `yuuri.cn` and `www.yuuri.cn` in Vercel Project Settings -> Domains.
+6. Keep `www.yuuri.cn` as the primary domain and redirect `yuuri.cn` to it.
+7. Configure the DNS records at your domain provider with the exact values shown by Vercel.
 
-1. Copy `deploy/research-hub.service` to `/etc/systemd/system/research-hub.service`
-2. Copy `deploy/nginx.research-hub.conf` into Nginx sites config and enable it
-3. Create `/etc/research-hub.env` with the production environment variables
-4. Run `sudo systemctl daemon-reload`
-5. Run `sudo systemctl enable research-hub`
-6. Provision TLS for `yuuri.cn` and `www.yuuri.cn`
-
-After that, pushing to `main` triggers CI validation and remote deployment.
+After the repository is connected, each push to the production branch selected in Vercel triggers a new deployment automatically.

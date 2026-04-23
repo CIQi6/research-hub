@@ -1,17 +1,16 @@
 import { auth } from "@/lib/auth";
-import { getSupabase } from "@/lib/supabase";
+import { listMembers, upsertMemberProfile } from "@/lib/member-service.ts";
 
 export async function GET() {
-  const { data, error } = await getSupabase()
-    .from("members")
-    .select("*")
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+  try {
+    const members = await listMembers();
+    return Response.json(members);
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
-
-  return Response.json(data);
 }
 
 export async function POST(request: Request) {
@@ -21,27 +20,13 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { field, resources } = body;
-
-  const { data, error } = await getSupabase()
-    .from("members")
-    .upsert(
-      {
-        github_id: session.user.github_id,
-        github_username: session.user.github_username,
-        avatar_url: session.user.avatar_url,
-        field: field || "",
-        resources: resources || [],
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "github_id" }
-    )
-    .select()
-    .single();
-
-  if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+  try {
+    const member = await upsertMemberProfile(session.user, body.field ?? "");
+    return Response.json(member);
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
-
-  return Response.json(data);
 }

@@ -2,30 +2,29 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import type { MemberSummary } from "@/lib/resource-types.ts";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 
-interface Resource {
-  title: string;
-  url: string;
+interface MemberListProps {
+  initialMembers?: MemberSummary[];
+  compact?: boolean;
+  hideSearch?: boolean;
 }
 
-interface Member {
-  github_id: number;
-  github_username: string;
-  avatar_url: string;
-  field: string;
-  resources: Resource[];
-  updated_at: string;
-}
-
-export function MemberList() {
-  const [members, setMembers] = useState<Member[]>([]);
+export function MemberList({
+  initialMembers,
+  compact = false,
+  hideSearch = false,
+}: MemberListProps) {
+  const [members, setMembers] = useState<MemberSummary[]>(initialMembers ?? []);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialMembers);
 
   useEffect(() => {
+    if (initialMembers) return;
+
     fetch("/api/members")
       .then((r) => r.json())
       .then((data) => {
@@ -33,7 +32,7 @@ export function MemberList() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [initialMembers]);
 
   const filtered = members.filter(
     (m) =>
@@ -51,12 +50,14 @@ export function MemberList() {
 
   return (
     <div className="space-y-6">
-      <Input
-        placeholder="Search by name or research field..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="max-w-md"
-      />
+      {!hideSearch && (
+        <Input
+          placeholder="Search by name or research field..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-md"
+        />
+      )}
 
       {filtered.length === 0 ? (
         <p className="py-10 text-center text-muted-foreground">
@@ -65,7 +66,7 @@ export function MemberList() {
             : "No results found."}
         </p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className={`grid gap-4 ${compact ? "" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
           {filtered.map((member) => (
             <Link
               key={member.github_id}
@@ -74,7 +75,7 @@ export function MemberList() {
             >
               <div className="flex items-start gap-3">
                 <Avatar className="h-10 w-10 shrink-0">
-                  <AvatarImage src={member.avatar_url} />
+                  <AvatarImage src={member.avatar_url ?? undefined} />
                   <AvatarFallback>
                     {member.github_username[0]?.toUpperCase()}
                   </AvatarFallback>
@@ -83,31 +84,18 @@ export function MemberList() {
                   <p className="font-medium leading-tight group-hover:underline">
                     {member.github_username}
                   </p>
-                  {member.field && (
-                    <Badge variant="secondary" className="mt-1.5 text-xs">
-                      {member.field}
+                  <div className="mt-1.5 flex flex-wrap gap-2">
+                    {member.field && (
+                      <Badge variant="secondary" className="text-xs">
+                        {member.field}
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-xs">
+                      {member.resource_count ?? 0} resources
                     </Badge>
-                  )}
+                  </div>
                 </div>
               </div>
-
-              {member.resources?.length > 0 && (
-                <div className="mt-4 space-y-1.5">
-                  {member.resources.slice(0, 3).map((r, i) => (
-                    <p
-                      key={i}
-                      className="truncate text-sm text-muted-foreground"
-                    >
-                      {r.title}
-                    </p>
-                  ))}
-                  {member.resources.length > 3 && (
-                    <p className="text-xs text-muted-foreground">
-                      +{member.resources.length - 3} more
-                    </p>
-                  )}
-                </div>
-              )}
             </Link>
           ))}
         </div>

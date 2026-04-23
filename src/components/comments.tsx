@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { formatTimeAgo } from "@/lib/resource-types.ts";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,12 +22,19 @@ export function Comments({ targetGithubId }: { targetGithubId: number }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [content, setContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [nowMs, setNowMs] = useState(0);
 
   const loadComments = useCallback(() => {
     fetch(`/api/comments?target_github_id=${targetGithubId}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setComments(data);
+      .then(async (r) => ({
+        data: await r.json(),
+        responseDate: r.headers.get("date"),
+      }))
+      .then(({ data, responseDate }) => {
+        if (Array.isArray(data)) {
+          setComments(data);
+          setNowMs(responseDate ? Date.parse(responseDate) : 0);
+        }
       });
   }, [targetGithubId]);
 
@@ -57,17 +65,6 @@ export function Comments({ targetGithubId }: { targetGithubId: number }) {
     if (res.ok) {
       loadComments();
     }
-  }
-
-  function timeAgo(dateStr: string) {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const minutes = Math.floor(diff / 60000);
-    if (minutes < 1) return "just now";
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
   }
 
   return (
@@ -105,7 +102,7 @@ export function Comments({ targetGithubId }: { targetGithubId: number }) {
         {comments.map((comment) => (
           <div key={comment.id} className="flex gap-3">
             <Avatar className="h-7 w-7 shrink-0">
-              <AvatarImage src={comment.author_avatar} />
+              <AvatarImage src={comment.author_avatar ?? undefined} />
               <AvatarFallback>
                 {comment.author_username[0]?.toUpperCase()}
               </AvatarFallback>
@@ -116,7 +113,7 @@ export function Comments({ targetGithubId }: { targetGithubId: number }) {
                   {comment.author_username}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {timeAgo(comment.created_at)}
+                  {formatTimeAgo(comment.created_at, nowMs || new Date(comment.created_at).getTime())}
                 </span>
                 {session?.user?.github_id === comment.author_github_id && (
                   <button

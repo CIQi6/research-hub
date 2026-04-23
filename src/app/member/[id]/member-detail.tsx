@@ -2,40 +2,29 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import type { MemberSummary, ResourceSummary } from "@/lib/resource-types.ts";
+import { ResourceCard } from "@/components/resource-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Comments } from "@/components/comments";
 
-interface Resource {
-  title: string;
-  url: string;
-}
-
-interface Member {
-  github_id: number;
-  github_username: string;
-  avatar_url: string;
-  field: string;
-  resources: Resource[];
-  created_at: string;
-  updated_at: string;
-}
-
 export function MemberDetail({ memberId }: { memberId: string }) {
-  const [member, setMember] = useState<Member | null>(null);
+  const [member, setMember] = useState<MemberSummary | null>(null);
+  const [resources, setResources] = useState<ResourceSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/members/${memberId}`)
-      .then((r) => {
-        if (r.ok) return r.json();
-        return null;
-      })
-      .then((data) => {
-        setMember(data);
-        setLoading(false);
-      });
+    Promise.all([
+      fetch(`/api/members/${memberId}`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/members/${memberId}/resources`).then((r) =>
+        r.ok ? r.json() : []
+      ),
+    ]).then(([memberData, resourceData]) => {
+      setMember(memberData);
+      setResources(Array.isArray(resourceData) ? resourceData : []);
+      setLoading(false);
+    });
   }, [memberId]);
 
   if (loading) {
@@ -68,7 +57,7 @@ export function MemberDetail({ memberId }: { memberId: string }) {
 
       <div className="flex items-start gap-4">
         <Avatar className="h-16 w-16">
-          <AvatarImage src={member.avatar_url} />
+          <AvatarImage src={member.avatar_url ?? undefined} />
           <AvatarFallback className="text-xl">
             {member.github_username[0]?.toUpperCase()}
           </AvatarFallback>
@@ -84,34 +73,25 @@ export function MemberDetail({ memberId }: { memberId: string }) {
           )}
           <p className="mt-1 text-xs text-muted-foreground">
             Joined{" "}
-            {new Date(member.created_at).toLocaleDateString("en-US", {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-            })}
+            {member.created_at
+              ? new Date(member.created_at).toLocaleDateString("en-US", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })
+              : "recently"}
           </p>
         </div>
       </div>
 
-      {member.resources?.length > 0 && (
+      {resources.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-            Shared Resources
+            Published Resources
           </h2>
-          <div className="space-y-2">
-            {member.resources.map((r, i) => (
-              <a
-                key={i}
-                href={r.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block rounded-md border p-3 transition-colors hover:bg-accent/50"
-              >
-                <p className="font-medium">{r.title}</p>
-                <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                  {r.url}
-                </p>
-              </a>
+          <div className="grid gap-4">
+            {resources.map((resource) => (
+              <ResourceCard key={resource.id} resource={resource} showOwner={false} />
             ))}
           </div>
         </div>

@@ -3,20 +3,20 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import type { ResourceSummary } from "@/lib/resource-types.ts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
-interface Resource {
-  title: string;
-  url: string;
-}
+import { ResourceCard } from "@/components/resource-card";
+import { ResourceEditor, type ResourceEditorValue } from "@/components/resource-editor";
 
 export function EditProfile() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [field, setField] = useState("");
-  const [resources, setResources] = useState<Resource[]>([{ title: "", url: "" }]);
-  const [saving, setSaving] = useState(false);
+  const [resources, setResources] = useState<ResourceSummary[]>([]);
+  const [editingResource, setEditingResource] = useState<ResourceSummary | null>(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [resourceSaving, setResourceSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -27,57 +27,72 @@ export function EditProfile() {
 
   useEffect(() => {
     if (session?.user?.github_id && !loaded) {
-      fetch(`/api/members/${session.user.github_id}`)
-        .then((r) => {
-          if (r.ok) return r.json();
-          return null;
-        })
-        .then((data) => {
-          if (data) {
-            setField(data.field || "");
-            setResources(
-              data.resources?.length > 0
-                ? data.resources
-                : [{ title: "", url: "" }]
-            );
-          }
-          setLoaded(true);
-        });
+      Promise.all([
+        fetch(`/api/members/${session.user.github_id}`).then((r) =>
+          r.ok ? r.json() : null
+        ),
+        fetch(`/api/members/${session.user.github_id}/resources`).then((r) =>
+          r.ok ? r.json() : []
+        ),
+      ]).then(([member, resourceData]) => {
+        if (member) {
+          setField(member.field || "");
+        }
+        setResources(Array.isArray(resourceData) ? resourceData : []);
+        setLoaded(true);
+      });
     }
   }, [session, loaded]);
 
-  function addResource() {
-    setResources([...resources, { title: "", url: "" }]);
+  async function reloadResources() {
+    if (!session?.user?.github_id) return;
+    const response = await fetch(`/api/members/${session.user.github_id}/resources`);
+    const data = await response.json();
+    setResources(Array.isArray(data) ? data : []);
   }
 
-  function removeResource(index: number) {
-    setResources(resources.filter((_, i) => i !== index));
-  }
-
-  function updateResource(index: number, key: keyof Resource, value: string) {
-    const updated = [...resources];
-    updated[index] = { ...updated[index], [key]: value };
-    setResources(updated);
-  }
-
-  async function handleSave() {
-    setSaving(true);
-
-    const validResources = resources.filter(
-      (r) => r.title.trim() && r.url.trim()
-    );
-
+  async function handleProfileSave() {
+    setProfileSaving(true);
     const res = await fetch("/api/members", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ field, resources: validResources }),
+      body: JSON.stringify({ field }),
     });
 
-    setSaving(false);
+    setProfileSaving(false);
 
     if (res.ok) {
-      router.push("/");
       router.refresh();
+    }
+  }
+
+  async function handleResourceSubmit(value: ResourceEditorValue) {
+    setResourceSaving(true);
+    const endpoint = editingResource
+      ? `/api/resources/${editingResource.id}`
+      : "/api/resources";
+    const method = editingResource ? "PATCH" : "POST";
+
+    const response = await fetch(endpoint, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(value),
+    });
+
+    setResourceSaving(false);
+
+    if (response.ok) {
+      setEditingResource(null);
+      await reloadResources();
+    }
+  }
+
+  async function handleDeleteResource(resourceId: string) {
+    const response = await fetch(`/api/resources/${resourceId}`, {
+      method: "DELETE",
+    });
+    if (response.ok) {
+      await reloadResources();
     }
   }
 
@@ -100,56 +115,82 @@ export function EditProfile() {
         </p>
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Research Field</label>
-        <Input
-          placeholder="e.g. Machine Learning, Computer Networks..."
-          value={field}
-          onChange={(e) => setField(e.target.value)}
-          className="max-w-md"
-        />
+      <div className="rounded-xl border p-5">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Research Field</label>
+          <Input
+            placeholder="e.g. Machine Learning, Computer Networks..."
+            value={field}
+            onChange={(e) => setField(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
+        <div className="mt-4 flex gap-3">
+          <Button onClick={handleProfileSave} disabled={profileSaving}>
+            {profileSaving ? "Saving..." : "Save profile"}
+          </Button>
+        </div>
       </div>
 
-      <div className="space-y-3">
-        <label className="text-sm font-medium">Resources</label>
-        {resources.map((r, i) => (
-          <div key={i} className="flex items-start gap-2">
-            <div className="flex flex-1 flex-col gap-2 sm:flex-row">
-              <Input
-                placeholder="Title"
-                value={r.title}
-                onChange={(e) => updateResource(i, "title", e.target.value)}
-              />
-              <Input
-                placeholder="URL (https://...)"
-                value={r.url}
-                onChange={(e) => updateResource(i, "url", e.target.value)}
-              />
-            </div>
-            {resources.length > 1 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => removeResource(i)}
-                className="shrink-0 text-muted-foreground hover:text-destructive"
-              >
-                Remove
-              </Button>
-            )}
+      <ResourceEditor
+        key={editingResource?.id ?? "new"}
+        title={editingResource ? "Edit resource" : "Publish a resource"}
+        description="Manual metadata only: title, link, type, summary, and comma-separated tags."
+        submitLabel={editingResource ? "Update resource" : "Publish resource"}
+        pending={resourceSaving}
+        initialValue={
+          editingResource
+            ? {
+                title: editingResource.title,
+                url: editingResource.url,
+                type: editingResource.type,
+                summary: editingResource.summary,
+                tags: editingResource.tags.map((tag) => tag.name).join(", "),
+              }
+            : undefined
+        }
+        onSubmit={handleResourceSubmit}
+        onCancel={editingResource ? () => setEditingResource(null) : undefined}
+      />
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold">My published resources</h3>
+          <p className="text-sm text-muted-foreground">
+            Manage the resources attached to your author profile.
+          </p>
+        </div>
+
+        {resources.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
+            No resources published yet.
           </div>
-        ))}
-        <Button variant="outline" size="sm" onClick={addResource}>
-          + Add Resource
-        </Button>
-      </div>
-
-      <div className="flex gap-3">
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? "Saving..." : "Save"}
-        </Button>
-        <Button variant="ghost" onClick={() => router.push("/")}>
-          Cancel
-        </Button>
+        ) : (
+          <div className="grid gap-4">
+            {resources.map((resource) => (
+              <div key={resource.id} className="space-y-3 rounded-xl border p-4">
+                <ResourceCard resource={resource} />
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingResource(resource)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => handleDeleteResource(resource.id)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

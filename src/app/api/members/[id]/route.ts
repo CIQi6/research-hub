@@ -1,20 +1,26 @@
-import { getSupabase } from "@/lib/supabase";
+import { getMemberByGithubId } from "@/lib/member-service.ts";
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
+  try {
+    const { id } = await params;
+    const githubId = Number(id);
+    if (!Number.isFinite(githubId)) {
+      return Response.json({ error: "Invalid member id" }, { status: 400 });
+    }
 
-  const { data, error } = await getSupabase()
-    .from("members")
-    .select("*")
-    .eq("github_id", id)
-    .single();
+    const member = await getMemberByGithubId(githubId);
+    if (!member) {
+      return Response.json({ error: "Member not found" }, { status: 404 });
+    }
 
-  if (error) {
-    return Response.json({ error: "Member not found" }, { status: 404 });
+    return Response.json(member);
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
+    );
   }
-
-  return Response.json(data);
 }

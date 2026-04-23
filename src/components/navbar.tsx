@@ -24,6 +24,11 @@ export function Navbar() {
         <div className="flex items-center gap-3">
           {session?.user ? (
             <>
+              <Link href="/bookmarks">
+                <Button variant="ghost" size="sm">
+                  Bookmarks
+                </Button>
+              </Link>
               <Link href="/profile">
                 <Button variant="ghost" size="sm">
                   Edit My Profile

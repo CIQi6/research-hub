@@ -3,7 +3,9 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import type { ResourceSummary } from "@/lib/resource-types.ts";
+import type { ArticleSummary, ResourceSummary } from "@/lib/resource-types.ts";
+import { ArticleCard } from "@/components/article-card";
+import { ArticleEditor, type ArticleEditorValue } from "@/components/article-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ResourceCard } from "@/components/resource-card";
@@ -14,11 +16,18 @@ export function EditProfile() {
   const router = useRouter();
   const [field, setField] = useState("");
   const [resources, setResources] = useState<ResourceSummary[]>([]);
+  const [articles, setArticles] = useState<ArticleSummary[]>([]);
   const [editingResource, setEditingResource] = useState<ResourceSummary | null>(null);
+  const [editingArticle, setEditingArticle] = useState<ArticleSummary | null>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [resourceSaving, setResourceSaving] = useState(false);
+  const [articleSaving, setArticleSaving] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [resourceError, setResourceError] = useState("");
+  const [articleError, setArticleError] = useState("");
+  const [profileStatus, setProfileStatus] = useState("");
+  const [resourceStatus, setResourceStatus] = useState("");
+  const [articleStatus, setArticleStatus] = useState("");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -36,11 +45,15 @@ export function EditProfile() {
         fetch(`/api/members/${session.user.github_id}/resources`).then((r) =>
           r.ok ? r.json() : []
         ),
-      ]).then(([member, resourceData]) => {
+        fetch(`/api/articles?author_github_id=${session.user.github_id}`).then((r) =>
+          r.ok ? r.json() : []
+        ),
+      ]).then(([member, resourceData, articleData]) => {
         if (member) {
           setField(member.field || "");
         }
         setResources(Array.isArray(resourceData) ? resourceData : []);
+        setArticles(Array.isArray(articleData) ? articleData : []);
         setLoaded(true);
       });
     }
@@ -53,9 +66,17 @@ export function EditProfile() {
     setResources(Array.isArray(data) ? data : []);
   }
 
+  async function reloadArticles() {
+    if (!session?.user?.github_id) return;
+    const response = await fetch(`/api/articles?author_github_id=${session.user.github_id}`);
+    const data = await response.json();
+    setArticles(Array.isArray(data) ? data : []);
+  }
+
   async function handleProfileSave() {
     setProfileSaving(true);
     setProfileError("");
+    setProfileStatus("");
 
     try {
       const res = await fetch("/api/members", {
@@ -66,11 +87,14 @@ export function EditProfile() {
 
       if (!res.ok) {
         const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-        setProfileError(payload?.error ?? "Profile update failed");
+        setProfileError(payload?.error ?? "资料保存失败");
         return;
       }
 
+      setProfileStatus("资料已保存。");
       router.refresh();
+    } catch {
+      setProfileError("资料保存失败，请重试。");
     } finally {
       setProfileSaving(false);
     }
@@ -79,6 +103,7 @@ export function EditProfile() {
   async function handleResourceSubmit(value: ResourceEditorValue) {
     setResourceSaving(true);
     setResourceError("");
+    setResourceStatus("");
     const endpoint = editingResource
       ? `/api/resources/${editingResource.id}`
       : "/api/resources";
@@ -95,30 +120,102 @@ export function EditProfile() {
         const payload = (await response.json().catch(() => null)) as
           | { error?: string }
           | null;
-        setResourceError(payload?.error ?? "Resource publish failed");
+        setResourceError(payload?.error ?? "资源保存失败");
         return;
       }
 
       setEditingResource(null);
       await reloadResources();
+      setResourceStatus(editingResource ? "资源已更新。" : "资源已发布。");
+    } catch {
+      setResourceError("资源保存失败，请重试。");
     } finally {
       setResourceSaving(false);
     }
   }
 
   async function handleDeleteResource(resourceId: string) {
-    const response = await fetch(`/api/resources/${resourceId}`, {
-      method: "DELETE",
-    });
-    if (response.ok) {
+    if (!window.confirm("确认删除这条资源？删除后不可恢复。")) return;
+
+    setResourceError("");
+    setResourceStatus("");
+
+    try {
+      const response = await fetch(`/api/resources/${resourceId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Resource delete failed");
+      }
+
       await reloadResources();
+      setResourceStatus("资源已删除。");
+    } catch {
+      setResourceError("资源删除失败，请重试。");
+    }
+  }
+
+  async function handleArticleSubmit(value: ArticleEditorValue) {
+    setArticleSaving(true);
+    setArticleError("");
+    setArticleStatus("");
+    const endpoint = editingArticle
+      ? `/api/articles/${editingArticle.id}`
+      : "/api/articles";
+    const method = editingArticle ? "PATCH" : "POST";
+
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(value),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        setArticleError(payload?.error ?? "文章保存失败");
+        return;
+      }
+
+      setEditingArticle(null);
+      await reloadArticles();
+      setArticleStatus(editingArticle ? "文章已更新。" : "文章已发布。");
+    } catch {
+      setArticleError("文章保存失败，请重试。");
+    } finally {
+      setArticleSaving(false);
+    }
+  }
+
+  async function handleDeleteArticle(articleId: string) {
+    if (!window.confirm("确认删除这篇文章？删除后不可恢复。")) return;
+
+    setArticleError("");
+    setArticleStatus("");
+
+    try {
+      const response = await fetch(`/api/articles/${articleId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Article delete failed");
+      }
+
+      await reloadArticles();
+      setArticleStatus("文章已删除。");
+    } catch {
+      setArticleError("文章删除失败，请重试。");
     }
   }
 
   if (status === "loading" || !loaded) {
     return (
       <div className="flex justify-center py-20 text-muted-foreground">
-        Loading...
+        正在加载...
       </div>
     );
   }
@@ -128,17 +225,17 @@ export function EditProfile() {
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="text-2xl font-semibold tracking-tight">Edit Profile</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">资料、资源与文章管理</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Signed in as <strong>{session.user.github_username}</strong>
+          当前登录：<strong>{session.user.github_username}</strong>
         </p>
       </div>
 
       <div className="rounded-xl border p-5">
         <div className="space-y-2">
-          <label className="text-sm font-medium">Research Field</label>
+          <label className="text-sm font-medium">研究方向</label>
           <Input
-            placeholder="e.g. Machine Learning, Computer Networks..."
+            placeholder="例如：机器学习、计算机网络"
             value={field}
             onChange={(e) => setField(e.target.value)}
             className="max-w-md"
@@ -146,19 +243,22 @@ export function EditProfile() {
         </div>
         <div className="mt-4 flex gap-3">
           <Button onClick={handleProfileSave} disabled={profileSaving}>
-            {profileSaving ? "Saving..." : "Save profile"}
+            {profileSaving ? "保存中..." : "保存资料"}
           </Button>
         </div>
         {profileError ? (
           <p className="mt-3 text-sm text-destructive">{profileError}</p>
         ) : null}
+        {profileStatus ? (
+          <p className="mt-3 text-sm text-muted-foreground">{profileStatus}</p>
+        ) : null}
       </div>
 
       <ResourceEditor
         key={editingResource?.id ?? "new"}
-        title={editingResource ? "Edit resource" : "Publish a resource"}
-        description="Manual metadata only: title, link, type, summary, and comma-separated tags."
-        submitLabel={editingResource ? "Update resource" : "Publish resource"}
+        title={editingResource ? "编辑资源" : "发布资源"}
+        description="手动填写标题、链接、类型、摘要和标签。"
+        submitLabel={editingResource ? "更新资源" : "发布资源"}
         pending={resourceSaving}
         initialValue={
           editingResource
@@ -177,23 +277,91 @@ export function EditProfile() {
       {resourceError ? (
         <p className="-mt-4 text-sm text-destructive">{resourceError}</p>
       ) : null}
+      {resourceStatus ? (
+        <p className="-mt-4 text-sm text-muted-foreground">{resourceStatus}</p>
+      ) : null}
+
+      <ArticleEditor
+        key={editingArticle?.id ?? "new-article"}
+        title={editingArticle ? "编辑文章" : "发布文章"}
+        description="写研究笔记、资源使用经验、论文阅读记录或项目复盘。"
+        submitLabel={editingArticle ? "更新文章" : "发布文章"}
+        pending={articleSaving}
+        initialValue={
+          editingArticle
+            ? {
+                title: editingArticle.title,
+                summary: editingArticle.summary,
+                content: editingArticle.content,
+              }
+            : undefined
+        }
+        onSubmit={handleArticleSubmit}
+        onCancel={editingArticle ? () => setEditingArticle(null) : undefined}
+      />
+      {articleError ? (
+        <p className="-mt-4 text-sm text-destructive">{articleError}</p>
+      ) : null}
+      {articleStatus ? (
+        <p className="-mt-4 text-sm text-muted-foreground">{articleStatus}</p>
+      ) : null}
 
       <div className="space-y-4">
         <div>
-          <h3 className="text-lg font-semibold">My published resources</h3>
+          <h3 className="text-lg font-semibold">我发布的文章</h3>
           <p className="text-sm text-muted-foreground">
-            Manage the resources attached to your author profile.
+            这些内容会出现在首页和知识分享区。
+          </p>
+        </div>
+
+        {articles.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
+            还没有发布文章。
+          </div>
+        ) : (
+          <div className="grid gap-4">
+            {articles.map((article) => (
+              <div key={article.id} className="space-y-3 rounded-xl border p-3">
+                <ArticleCard article={article} />
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingArticle(article)}
+                  >
+                    编辑
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => handleDeleteArticle(article.id)}
+                  >
+                    删除
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-lg font-semibold">我发布的资源</h3>
+          <p className="text-sm text-muted-foreground">
+            编辑或删除挂在你作者页下的资源。
           </p>
         </div>
 
         {resources.length === 0 ? (
           <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-            No resources published yet.
+            还没有发布资源。
           </div>
         ) : (
           <div className="grid gap-4">
             {resources.map((resource) => (
-              <div key={resource.id} className="space-y-3 rounded-xl border p-4">
+              <div key={resource.id} className="space-y-3 rounded-xl border p-3">
                 <ResourceCard resource={resource} />
                 <div className="flex gap-3">
                   <Button
@@ -201,7 +369,7 @@ export function EditProfile() {
                     size="sm"
                     onClick={() => setEditingResource(resource)}
                   >
-                    Edit
+                    编辑
                   </Button>
                   <Button
                     variant="ghost"
@@ -209,7 +377,7 @@ export function EditProfile() {
                     className="text-destructive hover:text-destructive"
                     onClick={() => handleDeleteResource(resource.id)}
                   >
-                    Delete
+                    删除
                   </Button>
                 </div>
               </div>

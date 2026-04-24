@@ -29,16 +29,36 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { target_github_id, content } = body;
+  const { target_github_id, content, parent_comment_id } = body;
 
   if (!target_github_id || !content?.trim()) {
     return Response.json({ error: "target_github_id and content are required" }, { status: 400 });
+  }
+
+  if (typeof parent_comment_id === "string" && parent_comment_id) {
+    const { data: parent, error: parentError } = await getSupabase()
+      .from("comments")
+      .select("id")
+      .eq("id", parent_comment_id)
+      .eq("target_github_id", target_github_id)
+      .maybeSingle();
+
+    if (parentError) {
+      return Response.json({ error: parentError.message }, { status: 500 });
+    }
+
+    if (!parent) {
+      return Response.json({ error: "Parent comment not found" }, { status: 404 });
+    }
   }
 
   const { data, error } = await getSupabase()
     .from("comments")
     .insert({
       target_github_id,
+      ...(typeof parent_comment_id === "string" && parent_comment_id
+        ? { parent_comment_id }
+        : {}),
       author_github_id: session.user.github_id,
       author_username: session.user.github_username,
       author_avatar: session.user.avatar_url,

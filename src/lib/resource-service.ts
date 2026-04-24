@@ -483,7 +483,8 @@ export async function listResourceComments(resourceId: string) {
 export async function addResourceComment(
   resourceId: string,
   content: string,
-  user: SessionUser
+  user: SessionUser,
+  parentCommentId?: string | null
 ) {
   const cleaned = content.trim();
   if (!cleaned) {
@@ -492,10 +493,28 @@ export async function addResourceComment(
 
   await ensureMemberFromSession(user);
 
+  if (parentCommentId) {
+    const { data: parent, error: parentError } = await getSupabase()
+      .from("resource_comments")
+      .select("id")
+      .eq("id", parentCommentId)
+      .eq("resource_id", resourceId)
+      .maybeSingle();
+
+    if (parentError) {
+      throw new Error(parentError.message);
+    }
+
+    if (!parent) {
+      throw new Error("Parent comment not found");
+    }
+  }
+
   const { data, error } = await getSupabase()
     .from("resource_comments")
     .insert({
       resource_id: resourceId,
+      ...(parentCommentId ? { parent_comment_id: parentCommentId } : {}),
       author_github_id: user.github_id,
       author_username: user.github_username,
       author_avatar: user.avatar_url,

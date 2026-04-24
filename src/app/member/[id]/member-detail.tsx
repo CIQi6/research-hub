@@ -2,7 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import type { MemberSummary, ResourceSummary } from "@/lib/resource-types.ts";
+import type {
+  ArticleSummary,
+  MemberSummary,
+  ResourceSummary,
+} from "@/lib/resource-types.ts";
+import { ArticleCard } from "@/components/article-card";
 import { ResourceCard } from "@/components/resource-card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +17,7 @@ import { Comments } from "@/components/comments";
 export function MemberDetail({ memberId }: { memberId: string }) {
   const [member, setMember] = useState<MemberSummary | null>(null);
   const [resources, setResources] = useState<ResourceSummary[]>([]);
+  const [articles, setArticles] = useState<ArticleSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,9 +26,13 @@ export function MemberDetail({ memberId }: { memberId: string }) {
       fetch(`/api/members/${memberId}/resources`).then((r) =>
         r.ok ? r.json() : []
       ),
-    ]).then(([memberData, resourceData]) => {
+      fetch(`/api/articles?author_github_id=${memberId}`).then((r) =>
+        r.ok ? r.json() : []
+      ),
+    ]).then(([memberData, resourceData, articleData]) => {
       setMember(memberData);
       setResources(Array.isArray(resourceData) ? resourceData : []);
+      setArticles(Array.isArray(articleData) ? articleData : []);
       setLoading(false);
     });
   }, [memberId]);
@@ -30,7 +40,7 @@ export function MemberDetail({ memberId }: { memberId: string }) {
   if (loading) {
     return (
       <div className="flex justify-center py-20 text-muted-foreground">
-        Loading...
+        正在加载...
       </div>
     );
   }
@@ -38,9 +48,9 @@ export function MemberDetail({ memberId }: { memberId: string }) {
   if (!member) {
     return (
       <div className="py-20 text-center">
-        <p className="text-muted-foreground">Member not found.</p>
+        <p className="text-muted-foreground">没有找到这个成员。</p>
         <Link href="/" className="mt-2 inline-block text-sm underline">
-          Back to members
+          返回资源中心
         </Link>
       </div>
     );
@@ -52,7 +62,7 @@ export function MemberDetail({ memberId }: { memberId: string }) {
         href="/"
         className="inline-block text-sm text-muted-foreground hover:text-foreground"
       >
-        &larr; Back
+        &larr; 返回
       </Link>
 
       <div className="flex items-start gap-4">
@@ -72,14 +82,14 @@ export function MemberDetail({ memberId }: { memberId: string }) {
             </Badge>
           )}
           <p className="mt-1 text-xs text-muted-foreground">
-            Joined{" "}
+            加入于{" "}
             {member.created_at
-              ? new Date(member.created_at).toLocaleDateString("en-US", {
+              ? new Date(member.created_at).toLocaleDateString("zh-CN", {
                   year: "numeric",
                   month: "short",
                   day: "numeric",
                 })
-              : "recently"}
+              : "最近"}
           </p>
         </div>
       </div>
@@ -87,11 +97,24 @@ export function MemberDetail({ memberId }: { memberId: string }) {
       {resources.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-            Published Resources
+            已发布资源
           </h2>
           <div className="grid gap-4">
             {resources.map((resource) => (
               <ResourceCard key={resource.id} resource={resource} showOwner={false} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {articles.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+            知识分享
+          </h2>
+          <div className="grid gap-4">
+            {articles.map((article) => (
+              <ArticleCard key={article.id} article={article} />
             ))}
           </div>
         </div>

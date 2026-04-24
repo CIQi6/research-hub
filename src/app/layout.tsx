@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Research Hub",
-  description: "A collaborative platform to share research interests and resources",
+  title: "研究资源中心",
+  description: "面向研究网络的资源分享、收藏与讨论平台",
 };
 
 export default function RootLayout({
@@ -26,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="zh-CN"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
@@ -36,7 +36,7 @@ export default function RootLayout({
             {children}
           </main>
           <footer className="border-t py-6 text-center text-xs text-muted-foreground">
-            Research Hub — Built with Next.js & Supabase
+            研究资源中心 · Next.js 与 Supabase
           </footer>
         </Providers>
       </body>

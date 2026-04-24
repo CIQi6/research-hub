@@ -30,7 +30,44 @@ test("parseResourceDraft rejects unsupported resource types", () => {
         summary: "Nope",
         tags: "",
       }),
-    /Unsupported resource type/
+    /不支持的资源类型/
+  );
+});
+
+test("parseResourceDraft rejects blank required fields", () => {
+  const base = {
+    title: "A resource",
+    url: "https://example.com",
+    type: "web",
+    summary: "Useful context.",
+    tags: "",
+  };
+
+  assert.throws(
+    () => parseResourceDraft({ ...base, title: "   " }),
+    /资源标题不能为空/
+  );
+  assert.throws(
+    () => parseResourceDraft({ ...base, url: "   " }),
+    /资源链接不能为空/
+  );
+  assert.throws(
+    () => parseResourceDraft({ ...base, summary: "   " }),
+    /资源摘要不能为空/
+  );
+});
+
+test("parseResourceDraft rejects invalid URLs", () => {
+  assert.throws(
+    () =>
+      parseResourceDraft({
+        title: "Bad URL",
+        url: "not a url",
+        type: "web",
+        summary: "Useful context.",
+        tags: "",
+      }),
+    /资源链接必须是有效的 http\(s\) URL/
   );
 });
 

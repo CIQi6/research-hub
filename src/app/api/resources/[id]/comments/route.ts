@@ -32,7 +32,12 @@ export async function POST(
   try {
     const body = await request.json();
     const { id } = await params;
-    const comment = await addResourceComment(id, body.content ?? "", session.user);
+    const comment = await addResourceComment(
+      id,
+      body.content ?? "",
+      session.user,
+      typeof body.parent_comment_id === "string" ? body.parent_comment_id : null
+    );
     return Response.json(comment, { status: 201 });
   } catch (error) {
     return Response.json(

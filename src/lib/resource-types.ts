@@ -42,11 +42,22 @@ export interface ResourceSummary {
 export interface ResourceComment {
   id: string;
   resource_id: string;
+  parent_comment_id: string | null;
   author_github_id: number;
   author_username: string;
   author_avatar: string | null;
   content: string;
   created_at: string;
+}
+
+export interface ArticleSummary {
+  id: string;
+  author: MemberSummary;
+  title: string;
+  summary: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
 }
 
 const RESOURCE_TYPE_SET = new Set<ResourceType>(
@@ -61,12 +72,12 @@ export function formatTimeAgo(dateStr: string, nowMs = Date.now()): string {
   const diff = nowMs - new Date(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
 
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes} 分钟前`;
 
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return `${hours} 小时前`;
 
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return `${days} 天前`;
 }

@@ -20,13 +20,13 @@ export default function BookmarksPage() {
   }, [status]);
 
   if (status === "loading" || (status === "authenticated" && resources === null)) {
-    return <div className="py-20 text-center text-muted-foreground">Loading bookmarks...</div>;
+    return <div className="py-20 text-center text-muted-foreground">正在加载收藏...</div>;
   }
 
   if (!session?.user) {
     return (
       <div className="py-20 text-center text-muted-foreground">
-        Sign in to view your bookmarks.
+        登录后查看收藏。
       </div>
     );
   }
@@ -34,15 +34,15 @@ export default function BookmarksPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Bookmarks</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">我的收藏</h1>
         <p className="mt-1 text-muted-foreground">
-          Quick access to resources you saved for later.
+          快速回到你保存过的资源。
         </p>
       </div>
 
       {resources && resources.length === 0 ? (
         <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-          No bookmarks yet.
+          还没有收藏。
         </div>
       ) : (
         <div className="grid gap-4">

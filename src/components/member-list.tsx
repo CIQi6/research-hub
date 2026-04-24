@@ -43,7 +43,7 @@ export function MemberList({
   if (loading) {
     return (
       <div className="flex justify-center py-20 text-muted-foreground">
-        Loading...
+        正在加载...
       </div>
     );
   }
@@ -52,7 +52,7 @@ export function MemberList({
     <div className="space-y-6">
       {!hideSearch && (
         <Input
-          placeholder="Search by name or research field..."
+          placeholder="搜索用户名或研究方向"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="max-w-md"
@@ -62,8 +62,8 @@ export function MemberList({
       {filtered.length === 0 ? (
         <p className="py-10 text-center text-muted-foreground">
           {members.length === 0
-            ? "No members yet. Sign in with GitHub to be the first!"
-            : "No results found."}
+            ? "还没有成员，先用 GitHub 登录。"
+            : "没有匹配结果。"}
         </p>
       ) : (
         <div className={`grid gap-4 ${compact ? "" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
@@ -91,7 +91,7 @@ export function MemberList({
                       </Badge>
                     )}
                     <Badge variant="outline" className="text-xs">
-                      {member.resource_count ?? 0} resources
+                      {member.resource_count ?? 0} 条资源
                     </Badge>
                   </div>
                 </div>

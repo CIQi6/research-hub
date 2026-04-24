@@ -40,6 +40,10 @@ npm run lint
 npm run build
 ```
 
+## Contributing
+
+All code, schema, configuration, and documentation changes should go through Pull Requests. Read [`CONTRIBUTING.md`](./CONTRIBUTING.md) before opening a PR.
+
 ## Vercel Deployment
 
 Production deployment now targets Vercel. The repository keeps a lightweight GitHub Actions CI workflow for tests, lint, and build checks only.

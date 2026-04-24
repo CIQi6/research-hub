@@ -1,5 +1,9 @@
 import { parseArticleDraft, type ArticleDraftPayload } from "@/lib/article-form.ts";
 import { getSupabase } from "@/lib/supabase";
+import {
+  getMissingTableSetupMessage,
+  isMissingTableError,
+} from "@/lib/supabase-errors.ts";
 import type { ArticleSummary, MemberSummary } from "@/lib/resource-types.ts";
 
 interface SessionUser {
@@ -86,6 +90,10 @@ export async function listArticles(filters: ArticleFilters = {}) {
 
   const { data, error } = await query;
   if (error) {
+    if (isMissingTableError(error, "articles")) {
+      return [];
+    }
+
     throw new Error(error.message);
   }
 
@@ -118,6 +126,10 @@ export async function getArticleById(articleId: string) {
     .maybeSingle();
 
   if (error) {
+    if (isMissingTableError(error, "articles")) {
+      return null;
+    }
+
     throw new Error(error.message);
   }
 
@@ -141,6 +153,10 @@ export async function createArticle(input: ArticleDraftPayload, user: SessionUse
     .single();
 
   if (error) {
+    if (isMissingTableError(error, "articles")) {
+      throw new Error(getMissingTableSetupMessage("articles"));
+    }
+
     throw new Error(error.message);
   }
 
@@ -160,6 +176,10 @@ export async function updateArticle(
     .maybeSingle();
 
   if (ownerError) {
+    if (isMissingTableError(ownerError, "articles")) {
+      throw new Error(getMissingTableSetupMessage("articles"));
+    }
+
     throw new Error(ownerError.message);
   }
 
@@ -182,6 +202,10 @@ export async function updateArticle(
     .eq("id", articleId);
 
   if (error) {
+    if (isMissingTableError(error, "articles")) {
+      throw new Error(getMissingTableSetupMessage("articles"));
+    }
+
     throw new Error(error.message);
   }
 
@@ -196,6 +220,10 @@ export async function deleteArticle(articleId: string, user: SessionUser) {
     .maybeSingle();
 
   if (error) {
+    if (isMissingTableError(error, "articles")) {
+      throw new Error(getMissingTableSetupMessage("articles"));
+    }
+
     throw new Error(error.message);
   }
 

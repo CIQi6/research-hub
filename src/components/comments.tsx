@@ -19,7 +19,12 @@ interface Comment {
   created_at: string;
 }
 
-export function Comments({ targetGithubId }: { targetGithubId: number }) {
+interface CommentsProps {
+  targetGithubId: number;
+  onCountChange?: (count: number) => void;
+}
+
+export function Comments({ targetGithubId, onCountChange }: CommentsProps) {
   const { data: session } = useSession();
   const [comments, setComments] = useState<Comment[]>([]);
   const [content, setContent] = useState("");
@@ -134,6 +139,10 @@ export function Comments({ targetGithubId }: { targetGithubId: number }) {
   }
 
   const threads = buildCommentThreads(comments);
+
+  useEffect(() => {
+    onCountChange?.(comments.length);
+  }, [comments.length, onCountChange]);
 
   function renderComment(comment: Comment, isReply = false) {
     const canDelete = session?.user?.github_id === comment.author_github_id;

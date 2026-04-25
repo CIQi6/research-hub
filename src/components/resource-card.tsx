@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import {
-  ArrowRightIcon,
   BookmarkIcon,
   ExternalLinkIcon,
   MessageSquareIcon,
@@ -35,11 +34,11 @@ export function ResourceCard({
   const canOpenOriginal = isExternalResourceUrl(resource.url);
 
   return (
-    <article className="group overflow-hidden rounded-xl border bg-card text-card-foreground transition hover:border-foreground/25 hover:shadow-sm">
+    <article className="group relative overflow-hidden rounded-xl border bg-card text-card-foreground transition hover:border-foreground/25 hover:shadow-sm focus-within:border-foreground/40">
       <div className="flex items-start justify-between gap-3 px-4 pt-4">
         <div className="flex min-w-0 flex-wrap gap-2">
           <Badge variant="secondary">{getResourceTypeLabel(resource.type)}</Badge>
-          {resource.tags.slice(0, 3).map((tag) => (
+          {resource.tags.slice(0, 2).map((tag) => (
             <Badge key={tag.id} variant="outline">
               {tag.name}
             </Badge>
@@ -53,26 +52,28 @@ export function ResourceCard({
             aria-label={`打开原链接：${title}`}
             className={cn(
               buttonVariants({ variant: "outline", size: "sm" }),
-              "gap-1.5"
+              "relative z-10 gap-1.5 px-2.5 sm:px-3"
             )}
           >
             <ExternalLinkIcon />
-            原链接
+            <span className="hidden sm:inline">原链接</span>
           </a>
         ) : (
           <span
             className={cn(
               buttonVariants({ variant: "outline", size: "sm" }),
-              "pointer-events-none gap-1.5 opacity-50"
+              "pointer-events-none relative z-10 gap-1.5 px-2.5 opacity-50 sm:px-3"
             )}
           >
-            缺少链接
+            <ExternalLinkIcon />
+            <span className="hidden sm:inline">缺少链接</span>
           </span>
         )}
       </div>
 
       <Link
         href={`/resource/${resource.id}`}
+        aria-label={`查看资源详情：${title}`}
         className="block space-y-3 px-4 py-3 outline-none transition focus-visible:bg-muted/60"
       >
         <div className="space-y-1.5">
@@ -90,25 +91,16 @@ export function ResourceCard({
         </div>
       </Link>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-muted/40 px-4 py-3">
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span>{formatResourceDate(resource.updated_at)}</span>
-          <span className="inline-flex items-center gap-1">
-            <MessageSquareIcon className="size-3.5" />
-            {resource.comment_count}
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <BookmarkIcon className="size-3.5" />
-            {resource.bookmark_count}
-          </span>
-        </div>
-        <Link
-          href={`/resource/${resource.id}`}
-          className="inline-flex items-center gap-1 text-xs font-medium text-foreground underline-offset-4 hover:underline"
-        >
-          详情
-          <ArrowRightIcon className="size-3.5" />
-        </Link>
+      <div className="flex flex-wrap items-center gap-4 border-t bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+        <span>{formatResourceDate(resource.updated_at)}</span>
+        <span className="inline-flex items-center gap-1">
+          <MessageSquareIcon className="size-3.5" />
+          {resource.comment_count}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <BookmarkIcon className="size-3.5" />
+          {resource.bookmark_count}
+        </span>
       </div>
     </article>
   );

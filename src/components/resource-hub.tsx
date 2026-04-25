@@ -1,7 +1,16 @@
 "use client";
 
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Code2Icon, PenLineIcon, SearchIcon, XIcon } from "lucide-react";
 import type {
   ArticleSummary,
@@ -9,7 +18,11 @@ import type {
   ResourceSummary,
   ResourceTag,
 } from "@/lib/resource-types.ts";
-import { buildResourceQueryString } from "@/lib/resource-queries.ts";
+import {
+  buildResourceQueryString,
+  normalizeResourceSort,
+  type ResourceSort,
+} from "@/lib/resource-queries.ts";
 import {
   getEmptyResourceMessage,
   hasActiveResourceFilters,
@@ -33,6 +46,12 @@ const FILTER_OPTIONS: Array<{ value: ResourceTypeFilter; label: string }> = [
   { value: "ebook", label: "电子书" },
 ];
 
+const SORT_OPTIONS: Array<{ value: ResourceSort; label: string }> = [
+  { value: "latest", label: "最新" },
+  { value: "discussed", label: "有讨论" },
+  { value: "bookmarked", label: "收藏多" },
+];
+
 interface ResourceHubProps {
   initialResources: ResourceSummary[];
   initialTags: ResourceTag[];
@@ -48,17 +67,100 @@ export function ResourceHub({
   initialArticles,
   initialError = "",
 }: ResourceHubProps) {
+  return (
+    <Suspense fallback={null}>
+      <ResourceHubContent
+        initialResources={initialResources}
+        initialTags={initialTags}
+        initialMembers={initialMembers}
+        initialArticles={initialArticles}
+        initialError={initialError}
+      />
+    </Suspense>
+  );
+}
+
+function ResourceHubContent({
+  initialResources,
+  initialTags,
+  initialMembers,
+  initialArticles,
+  initialError = "",
+}: ResourceHubProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+  const initialStats = useMemo(() => ({
+    resources: initialResources.length,
+    members: initialMembers.length,
+    tags: initialTags.length,
+    articles: initialArticles.length,
+  }), [initialArticles.length, initialMembers.length, initialResources.length, initialTags.length]);
+  const initialType = searchParams.get("type");
+  const initialSelectedType =
+    FILTER_OPTIONS.some((option) => option.value === initialType)
+      ? (initialType as ResourceTypeFilter)
+      : "all";
   const [resources, setResources] = useState<ResourceSummary[]>(initialResources);
   const [tags] = useState<ResourceTag[]>(initialTags);
   const [members] = useState<MemberSummary[]>(initialMembers);
   const [articles] = useState<ArticleSummary[]>(initialArticles);
-  const [search, setSearch] = useState("");
-  const [selectedType, setSelectedType] = useState<ResourceTypeFilter>("all");
-  const [selectedTag, setSelectedTag] = useState("all");
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  const [selectedType, setSelectedType] =
+    useState<ResourceTypeFilter>(initialSelectedType);
+  const [selectedTag, setSelectedTag] = useState(searchParams.get("tag") ?? "all");
+  const [selectedSort, setSelectedSort] = useState<ResourceSort>(
+    normalizeResourceSort(searchParams.get("sort"))
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError);
   const hasMounted = useRef(false);
   const deferredSearch = useDeferredValue(search);
+
+  function writeQuery(next: {
+    q?: string;
+    type?: ResourceTypeFilter;
+    tag?: string;
+    sort?: ResourceSort;
+    replace?: boolean;
+  }) {
+    const nextSearch = next.q ?? search;
+    const nextType = next.type ?? selectedType;
+    const nextTag = next.tag ?? selectedTag;
+    const nextSort = next.sort ?? selectedSort;
+    const query = buildResourceQueryString({
+      q: nextSearch,
+      type: nextType === "all" ? undefined : nextType,
+      tag: nextTag === "all" ? undefined : nextTag,
+      sort: nextSort,
+    });
+    const href = query ? `${pathname}?${query}` : pathname;
+
+    startTransition(() => {
+      if (next.replace) {
+        router.replace(href, { scroll: false });
+        return;
+      }
+
+      router.push(href, { scroll: false });
+    });
+  }
+
+  useEffect(() => {
+    const nextTypeParam = searchParams.get("type");
+    const nextSelectedType =
+      FILTER_OPTIONS.some((option) => option.value === nextTypeParam)
+        ? (nextTypeParam as ResourceTypeFilter)
+        : "all";
+
+    startTransition(() => {
+      setSearch(searchParams.get("q") ?? "");
+      setSelectedType(nextSelectedType);
+      setSelectedTag(searchParams.get("tag") ?? "all");
+      setSelectedSort(normalizeResourceSort(searchParams.get("sort")));
+    });
+  }, [searchParams]);
 
   useEffect(() => {
     if (!hasMounted.current) {
@@ -71,6 +173,7 @@ export function ResourceHub({
       q: deferredSearch,
       type: selectedType === "all" ? undefined : selectedType,
       tag: selectedTag === "all" ? undefined : selectedTag,
+      sort: selectedSort,
     });
 
     setLoading(true);
@@ -100,18 +203,23 @@ export function ResourceHub({
       });
 
     return () => controller.abort();
-  }, [deferredSearch, selectedTag, selectedType]);
+  }, [deferredSearch, selectedSort, selectedTag, selectedType]);
 
-  const activeFilters = hasActiveResourceFilters({
-    q: search,
-    type: selectedType,
-    tag: selectedTag,
-  });
+  const activeFilters =
+    hasActiveResourceFilters({
+      q: search,
+      type: selectedType,
+      tag: selectedTag,
+    }) || selectedSort !== "latest";
 
   function resetFilters() {
     setSearch("");
     setSelectedType("all");
     setSelectedTag("all");
+    setSelectedSort("latest");
+    startTransition(() => {
+      router.push(pathname, { scroll: false });
+    });
   }
 
   return (
@@ -147,19 +255,19 @@ export function ResourceHub({
         <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:grid-cols-2">
           <div className="rounded-lg border px-3 py-2">
             <p className="text-xs text-muted-foreground">资源</p>
-            <p className="font-medium">{resources.length}</p>
+            <p className="font-medium">{initialStats.resources}</p>
           </div>
           <div className="rounded-lg border px-3 py-2">
             <p className="text-xs text-muted-foreground">成员</p>
-            <p className="font-medium">{members.length}</p>
+            <p className="font-medium">{initialStats.members}</p>
           </div>
           <div className="rounded-lg border px-3 py-2">
             <p className="text-xs text-muted-foreground">标签</p>
-            <p className="font-medium">{tags.length}</p>
+            <p className="font-medium">{initialStats.tags}</p>
           </div>
           <div className="rounded-lg border px-3 py-2">
             <p className="text-xs text-muted-foreground">文章</p>
-            <p className="font-medium">{articles.length}</p>
+            <p className="font-medium">{initialStats.articles}</p>
           </div>
         </div>
       </section>
@@ -171,7 +279,12 @@ export function ResourceHub({
             <Input
               placeholder="搜索标题或摘要"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => {
+                const nextSearch = event.target.value;
+
+                setSearch(nextSearch);
+                writeQuery({ q: nextSearch, replace: true });
+              }}
               className="pl-9"
               aria-label="搜索资源"
             />
@@ -183,7 +296,10 @@ export function ResourceHub({
                 key={option.value}
                 type="button"
                 aria-pressed={selectedType === option.value}
-                onClick={() => setSelectedType(option.value)}
+                onClick={() => {
+                  setSelectedType(option.value);
+                  writeQuery({ type: option.value });
+                }}
                 className={`rounded-full border px-3 py-1.5 text-sm transition ${
                   selectedType === option.value
                     ? "border-foreground bg-foreground text-background"
@@ -200,7 +316,10 @@ export function ResourceHub({
           <button
             type="button"
             aria-pressed={selectedTag === "all"}
-            onClick={() => setSelectedTag("all")}
+            onClick={() => {
+              setSelectedTag("all");
+              writeQuery({ tag: "all" });
+            }}
             className={`rounded-full border px-3 py-1 text-xs transition ${
               selectedTag === "all"
                 ? "border-foreground bg-foreground text-background"
@@ -214,7 +333,10 @@ export function ResourceHub({
               key={tag.id}
               type="button"
               aria-pressed={selectedTag === tag.slug}
-              onClick={() => setSelectedTag(tag.slug)}
+              onClick={() => {
+                setSelectedTag(tag.slug);
+                writeQuery({ tag: tag.slug });
+              }}
               className={`rounded-full border px-3 py-1 text-xs transition ${
                 selectedTag === tag.slug
                   ? "border-foreground bg-foreground text-background"
@@ -245,12 +367,37 @@ export function ResourceHub({
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_0.8fr]">
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">最新资源</h2>
               <p className="text-sm text-muted-foreground">
-                {loading ? "正在更新..." : `${resources.length} 条`}
+                {loading || isPending ? "正在更新..." : `${resources.length} 条结果`}
               </p>
+            </div>
+            <div
+              role="tablist"
+              aria-label="资源排序"
+              className="flex rounded-full border bg-background p-1"
+            >
+              {SORT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedSort === option.value}
+                  onClick={() => {
+                    setSelectedSort(option.value);
+                    writeQuery({ sort: option.value });
+                  }}
+                  className={`rounded-full px-3 py-1 text-sm transition ${
+                    selectedSort === option.value
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
           </div>
 

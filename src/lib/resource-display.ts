@@ -1,3 +1,4 @@
+import type { ResourceSort } from "@/lib/resource-queries.ts";
 import type { ResourceType } from "@/lib/resource-types.ts";
 
 export type ResourceTypeFilter = "all" | ResourceType;
@@ -6,6 +7,7 @@ export interface ResourceFilterState {
   q: string;
   type: ResourceTypeFilter;
   tag: string;
+  sort?: ResourceSort;
 }
 
 const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
@@ -66,25 +68,6 @@ export function hasActiveResourceFilters(filters: ResourceFilterState): boolean 
     filters.type !== "all" ||
     filters.tag !== "all"
   );
-}
-
-export function buildResourceQueryString(filters: ResourceFilterState): string {
-  const params = new URLSearchParams();
-  const query = filters.q.trim();
-
-  if (query) {
-    params.set("q", query);
-  }
-
-  if (filters.type !== "all") {
-    params.set("type", filters.type);
-  }
-
-  if (filters.tag !== "all") {
-    params.set("tag", filters.tag);
-  }
-
-  return params.toString();
 }
 
 export function getEmptyResourceMessage(hasFilters: boolean): string {

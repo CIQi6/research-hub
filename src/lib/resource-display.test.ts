@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  buildResourceQueryString,
   formatResourceDate,
   getEmptyResourceMessage,
   getResourceDomain,
@@ -48,17 +47,6 @@ test("resource title and summary helpers protect legacy invalid rows", () => {
 
 test("formatResourceDate returns a stable UTC date string", () => {
   assert.equal(formatResourceDate("2026-04-24T05:13:47.522763+00:00"), "2026-04-24");
-});
-
-test("buildResourceQueryString omits inactive filters and trims search", () => {
-  assert.equal(
-    buildResourceQueryString({
-      q: "  ai infra  ",
-      type: "all",
-      tag: "ai-infra",
-    }),
-    "q=ai+infra&tag=ai-infra"
-  );
 });
 
 test("hasActiveResourceFilters detects search, type, or tag filters", () => {

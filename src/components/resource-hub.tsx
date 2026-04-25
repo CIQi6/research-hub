@@ -52,6 +52,9 @@ const SORT_OPTIONS: Array<{ value: ResourceSort; label: string }> = [
   { value: "bookmarked", label: "收藏多" },
 ];
 
+const PENDING_QUERY_TTL_MS = 3000;
+const MAX_PENDING_QUERIES = 20;
+
 interface ResourceHubProps {
   initialResources: ResourceSummary[];
   initialTags: ResourceTag[];
@@ -123,8 +126,24 @@ function ResourceHubContent({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError);
-  const pendingWrittenQueries = useRef(new Set<string>());
+  const pendingWrittenQueries = useRef(new Map<string, number>());
   const deferredSearch = useDeferredValue(search);
+
+  function rememberWrittenQuery(query: string) {
+    const now = Date.now();
+
+    for (const [key, expiresAt] of pendingWrittenQueries.current) {
+      if (expiresAt <= now) {
+        pendingWrittenQueries.current.delete(key);
+      }
+    }
+
+    if (pendingWrittenQueries.current.size >= MAX_PENDING_QUERIES) {
+      pendingWrittenQueries.current.clear();
+    }
+
+    pendingWrittenQueries.current.set(query, now + PENDING_QUERY_TTL_MS);
+  }
 
   function writeQuery(next: {
     q?: string;
@@ -145,7 +164,7 @@ function ResourceHubContent({
     });
     const href = query ? `${pathname}?${query}` : pathname;
 
-    pendingWrittenQueries.current.add(query);
+    rememberWrittenQuery(query);
     startTransition(() => {
       if (next.replace) {
         router.replace(href, { scroll: false });
@@ -158,9 +177,14 @@ function ResourceHubContent({
 
   useEffect(() => {
     const currentQuery = searchParams.toString();
+    const expiresAt = pendingWrittenQueries.current.get(currentQuery);
 
-    if (pendingWrittenQueries.current.delete(currentQuery)) {
-      return;
+    if (expiresAt) {
+      pendingWrittenQueries.current.delete(currentQuery);
+
+      if (expiresAt > Date.now()) {
+        return;
+      }
     }
 
     const nextTypeParam = searchParams.get("type");

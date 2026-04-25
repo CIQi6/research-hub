@@ -15,7 +15,7 @@ export async function GET(
     }
 
     const resources = await listResources(
-      { ownerGithubId },
+      { ownerGithubId, sort: "latest" },
       session?.user?.github_id
     );
     return Response.json(resources);

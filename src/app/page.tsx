@@ -17,7 +17,7 @@ export default async function Home() {
 
   const [resourcesResult, tagsResult, membersResult, articlesResult] =
     await Promise.allSettled([
-    listResources({}, viewerGithubId),
+    listResources({ sort: "latest" }, viewerGithubId),
     listTags(),
     listMembers(),
     listArticles({ limit: 4 }),

@@ -601,6 +601,6 @@ export async function listBookmarks(user: SessionUser) {
     return [];
   }
 
-  const resources = await listResources({}, user.github_id);
+  const resources = await listResources({ sort: "latest" }, user.github_id);
   return resources.filter((resource) => resourceIds.includes(resource.id));
 }

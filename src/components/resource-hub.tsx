@@ -9,8 +9,8 @@ import type {
   ResourceSummary,
   ResourceTag,
 } from "@/lib/resource-types.ts";
+import { buildResourceQueryString } from "@/lib/resource-queries.ts";
 import {
-  buildResourceQueryString,
   getEmptyResourceMessage,
   hasActiveResourceFilters,
   type ResourceTypeFilter,
@@ -69,8 +69,8 @@ export function ResourceHub({
     const controller = new AbortController();
     const query = buildResourceQueryString({
       q: deferredSearch,
-      type: selectedType,
-      tag: selectedTag,
+      type: selectedType === "all" ? undefined : selectedType,
+      tag: selectedTag === "all" ? undefined : selectedTag,
     });
 
     setLoading(true);

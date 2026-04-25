@@ -1,6 +1,6 @@
-import { getSupabase } from "@/lib/supabase";
-import { type ResourceFilters } from "@/lib/resource-queries.ts";
-import { parseResourceDraft } from "@/lib/resource-form.ts";
+import { getSupabase } from "./supabase.ts";
+import { type ResourceFilters, type ResourceSort } from "./resource-queries.ts";
+import { parseResourceDraft } from "./resource-form.ts";
 import type {
   MemberSummary,
   ResourceComment,
@@ -220,6 +220,38 @@ function mapResourceRow(
   };
 }
 
+export interface RelatedResourcesPayload {
+  by_owner: ResourceSummary[];
+  by_tag: ResourceSummary[];
+}
+
+function compareDateDesc(left: ResourceSummary, right: ResourceSummary): number {
+  return new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime();
+}
+
+export function sortResourceSummaries(
+  resources: ResourceSummary[],
+  sort: ResourceSort
+): ResourceSummary[] {
+  const next = [...resources];
+
+  if (sort === "discussed") {
+    return next.sort(
+      (left, right) =>
+        right.comment_count - left.comment_count || compareDateDesc(left, right)
+    );
+  }
+
+  if (sort === "bookmarked") {
+    return next.sort(
+      (left, right) =>
+        right.bookmark_count - left.bookmark_count || compareDateDesc(left, right)
+    );
+  }
+
+  return next.sort(compareDateDesc);
+}
+
 async function resolveTaggedResourceIds(tagSlug: string): Promise<string[] | null> {
   const { data: tagRows, error: tagError } = await getSupabase()
     .from("tags")
@@ -313,9 +345,11 @@ export async function listResources(filters: ResourceFilters, viewerGithubId?: n
       fetchBookmarkedIds(resourceIds, viewerGithubId),
     ]);
 
-  return rows.map((row) =>
+  const mapped = rows.map((row) =>
     mapResourceRow(row, tagsByResource, commentCounts, bookmarkCounts, bookmarkedIds)
   );
+
+  return sortResourceSummaries(mapped, filters.sort);
 }
 
 export async function getResourceById(resourceId: string, viewerGithubId?: number) {
@@ -367,6 +401,45 @@ export async function getResourceById(resourceId: string, viewerGithubId?: numbe
     bookmarkCounts,
     bookmarkedIds
   );
+}
+
+export async function listRelatedResources(
+  resourceId: string,
+  viewerGithubId?: number
+): Promise<RelatedResourcesPayload> {
+  const resource = await getResourceById(resourceId, viewerGithubId);
+  if (!resource) {
+    return { by_owner: [], by_tag: [] };
+  }
+
+  const byOwner = (
+    await listResources(
+      {
+        ownerGithubId: resource.owner.github_id,
+        sort: "latest",
+      },
+      viewerGithubId
+    )
+  )
+    .filter((item) => item.id !== resourceId)
+    .slice(0, 3);
+
+  const tagSlugs = resource.tags.map((tag) => tag.slug);
+  const byTagMap = new Map<string, ResourceSummary>();
+
+  for (const tag of tagSlugs) {
+    const resources = await listResources({ tag, sort: "latest" }, viewerGithubId);
+    for (const item of resources) {
+      if (item.id !== resourceId && !byTagMap.has(item.id)) {
+        byTagMap.set(item.id, item);
+      }
+    }
+  }
+
+  return {
+    by_owner: byOwner,
+    by_tag: [...byTagMap.values()].slice(0, 3),
+  };
 }
 
 export async function createResource(

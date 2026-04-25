@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
+import { MessageSquareIcon } from "lucide-react";
 import { buildCommentThreads } from "@/lib/comment-thread.ts";
 import { formatTimeAgo, type ResourceComment } from "@/lib/resource-types.ts";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -212,9 +213,15 @@ export function ResourceComments({ resourceId }: ResourceCommentsProps) {
           </div>
         </form>
       ) : (
-        <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-          登录后可以参与讨论。
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-4">
+          <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+            <MessageSquareIcon className="size-4" />
+            登录后可以参与讨论、回复和收藏资源。
+          </p>
+          <Button type="button" size="sm" onClick={() => void signIn("github")}>
+            GitHub 登录
+          </Button>
+        </div>
       )}
 
       {comments.length > 0 && <Separator />}

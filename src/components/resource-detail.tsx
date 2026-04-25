@@ -8,6 +8,7 @@ import {
   ExternalLinkIcon,
   MessageSquareIcon,
 } from "lucide-react";
+import type { RelatedResourcesPayload } from "@/lib/resource-service.ts";
 import type { ResourceSummary } from "@/lib/resource-types.ts";
 import {
   formatResourceDate,
@@ -18,6 +19,7 @@ import {
   isExternalResourceUrl,
 } from "@/lib/resource-display.ts";
 import { BookmarkButton } from "@/components/bookmark-button";
+import { ResourceCard } from "@/components/resource-card";
 import { ResourceComments } from "@/components/resource-comments";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +43,11 @@ export function ResourceDetail({
   );
   const [loading, setLoading] = useState(initialResource === undefined && !initialError);
   const [error, setError] = useState(initialError);
+  const [related, setRelated] = useState<RelatedResourcesPayload>({
+    by_owner: [],
+    by_tag: [],
+  });
+  const [relatedError, setRelatedError] = useState("");
 
   useEffect(() => {
     if (initialResource !== undefined || initialError) {
@@ -64,6 +71,41 @@ export function ResourceDetail({
         setLoading(false);
       });
   }, [initialError, initialResource, resourceId]);
+
+  useEffect(() => {
+    if (!resource?.id) {
+      return;
+    }
+
+    let active = true;
+
+    fetch(`/api/resources/${resource.id}/related`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Related resources request failed");
+        }
+
+        return response.json();
+      })
+      .then((data) => {
+        if (!active) return;
+
+        setRelated({
+          by_owner: Array.isArray(data?.by_owner) ? data.by_owner : [],
+          by_tag: Array.isArray(data?.by_tag) ? data.by_tag : [],
+        });
+        setRelatedError("");
+      })
+      .catch(() => {
+        if (active) {
+          setRelatedError("相关资源加载失败。");
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [resource?.id]);
 
   if (loading) {
     return <div className="py-20 text-center text-muted-foreground">正在加载资源...</div>;
@@ -197,12 +239,37 @@ export function ResourceDetail({
               </dl>
             </div>
 
-            <div className="rounded-xl border border-dashed p-4">
-              <p className="text-sm font-medium">相关推荐</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                暂无相关推荐。
-              </p>
-            </div>
+            {related.by_owner.length > 0 || related.by_tag.length > 0 || relatedError ? (
+              <div className="space-y-4">
+                {related.by_owner.length > 0 ? (
+                  <section className="space-y-3">
+                    <h2 className="text-sm font-medium">同作者更多资源</h2>
+                    <div className="grid gap-3">
+                      {related.by_owner.map((item) => (
+                        <ResourceCard key={item.id} resource={item} showOwner={false} />
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                {related.by_tag.length > 0 ? (
+                  <section className="space-y-3">
+                    <h2 className="text-sm font-medium">同标签资源</h2>
+                    <div className="grid gap-3">
+                      {related.by_tag.map((item) => (
+                        <ResourceCard key={item.id} resource={item} />
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                {relatedError ? (
+                  <p className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {relatedError}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
           </section>
 
           <aside className="space-y-3 rounded-xl border p-4">

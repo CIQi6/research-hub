@@ -123,7 +123,7 @@ function ResourceHubContent({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError);
-  const lastWrittenQuery = useRef<string | null>(null);
+  const pendingWrittenQueries = useRef(new Set<string>());
   const deferredSearch = useDeferredValue(search);
 
   function writeQuery(next: {
@@ -145,7 +145,7 @@ function ResourceHubContent({
     });
     const href = query ? `${pathname}?${query}` : pathname;
 
-    lastWrittenQuery.current = query;
+    pendingWrittenQueries.current.add(query);
     startTransition(() => {
       if (next.replace) {
         router.replace(href, { scroll: false });
@@ -159,8 +159,7 @@ function ResourceHubContent({
   useEffect(() => {
     const currentQuery = searchParams.toString();
 
-    if (lastWrittenQuery.current === currentQuery) {
-      lastWrittenQuery.current = null;
+    if (pendingWrittenQueries.current.delete(currentQuery)) {
       return;
     }
 

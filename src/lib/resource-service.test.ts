@@ -70,3 +70,15 @@ test("sortResourceSummaries orders bookmarked by bookmark count then date", () =
     ["saved-new", "saved-old", "unsaved"]
   );
 });
+
+test("sortResourceSummaries does not mutate the input array", () => {
+  const input = [
+    resource("old", "2026-01-01T00:00:00.000Z", 0, 0),
+    resource("new", "2026-02-01T00:00:00.000Z", 0, 0),
+  ];
+
+  const sorted = sortResourceSummaries(input, "latest");
+
+  assert.deepEqual(input.map((item) => item.id), ["old", "new"]);
+  assert.deepEqual(sorted.map((item) => item.id), ["new", "old"]);
+});

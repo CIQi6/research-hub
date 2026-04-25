@@ -438,7 +438,7 @@ export async function listRelatedResources(
 
   return {
     by_owner: byOwner,
-    by_tag: [...byTagMap.values()].slice(0, 3),
+    by_tag: sortResourceSummaries([...byTagMap.values()], "latest").slice(0, 3),
   };
 }
 

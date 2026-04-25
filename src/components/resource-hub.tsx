@@ -68,7 +68,7 @@ export function ResourceHub({
   initialError = "",
 }: ResourceHubProps) {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<ResourceHubFallback />}>
       <ResourceHubContent
         initialResources={initialResources}
         initialTags={initialTags}
@@ -77,6 +77,14 @@ export function ResourceHub({
         initialError={initialError}
       />
     </Suspense>
+  );
+}
+
+function ResourceHubFallback() {
+  return (
+    <div className="py-20 text-center text-muted-foreground">
+      正在加载资源中心...
+    </div>
   );
 }
 
@@ -115,7 +123,7 @@ function ResourceHubContent({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError);
-  const hasMounted = useRef(false);
+  const lastWrittenQuery = useRef<string | null>(null);
   const deferredSearch = useDeferredValue(search);
 
   function writeQuery(next: {
@@ -137,6 +145,7 @@ function ResourceHubContent({
     });
     const href = query ? `${pathname}?${query}` : pathname;
 
+    lastWrittenQuery.current = query;
     startTransition(() => {
       if (next.replace) {
         router.replace(href, { scroll: false });
@@ -148,6 +157,13 @@ function ResourceHubContent({
   }
 
   useEffect(() => {
+    const currentQuery = searchParams.toString();
+
+    if (lastWrittenQuery.current === currentQuery) {
+      lastWrittenQuery.current = null;
+      return;
+    }
+
     const nextTypeParam = searchParams.get("type");
     const nextSelectedType =
       FILTER_OPTIONS.some((option) => option.value === nextTypeParam)
@@ -163,11 +179,6 @@ function ResourceHubContent({
   }, [searchParams]);
 
   useEffect(() => {
-    if (!hasMounted.current) {
-      hasMounted.current = true;
-      return;
-    }
-
     const controller = new AbortController();
     const query = buildResourceQueryString({
       q: deferredSearch,
@@ -176,8 +187,10 @@ function ResourceHubContent({
       sort: selectedSort,
     });
 
-    setLoading(true);
-    setError("");
+    startTransition(() => {
+      setLoading(true);
+      setError("");
+    });
 
     fetch(`/api/resources${query ? `?${query}` : ""}`, {
       signal: controller.signal,

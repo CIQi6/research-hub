@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { ArticleSummary, ResourceSummary } from "@/lib/resource-types.ts";
 import { ArticleCard } from "@/components/article-card";
 import { ArticleEditor, type ArticleEditorValue } from "@/components/article-editor";
+import { LoginWall } from "@/components/login-wall";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ResourceCard } from "@/components/resource-card";
@@ -29,12 +30,6 @@ export function EditProfile() {
   const [resourceStatus, setResourceStatus] = useState("");
   const [articleStatus, setArticleStatus] = useState("");
   const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/");
-    }
-  }, [status, router]);
 
   useEffect(() => {
     if (session?.user?.github_id && !loaded) {
@@ -212,7 +207,7 @@ export function EditProfile() {
     }
   }
 
-  if (status === "loading" || !loaded) {
+  if (status === "loading" || (status === "authenticated" && !loaded)) {
     return (
       <div className="flex justify-center py-20 text-muted-foreground">
         正在加载...
@@ -220,7 +215,16 @@ export function EditProfile() {
     );
   }
 
-  if (!session?.user) return null;
+  if (!session?.user) {
+    return (
+      <LoginWall
+        title="登录后发布资源和文章"
+        description="登录后可以管理个人资料、发布研究资源、写文章，并维护你自己的作者页。"
+        secondaryLabel="返回资源中心"
+        secondaryHref="/"
+      />
+    );
+  }
 
   return (
     <div className="space-y-8">

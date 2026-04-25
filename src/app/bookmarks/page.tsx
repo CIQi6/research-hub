@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import type { ResourceSummary } from "@/lib/resource-types.ts";
+import { LoginWall } from "@/components/login-wall";
 import { ResourceCard } from "@/components/resource-card";
 
 export default function BookmarksPage() {
@@ -25,9 +26,12 @@ export default function BookmarksPage() {
 
   if (!session?.user) {
     return (
-      <div className="py-20 text-center text-muted-foreground">
-        登录后查看收藏。
-      </div>
+      <LoginWall
+        title="登录后查看收藏"
+        description="收藏用于保存之后要继续看的资源，登录后可以在这里快速回到它们。"
+        secondaryLabel="浏览资源"
+        secondaryHref="/"
+      />
     );
   }
 

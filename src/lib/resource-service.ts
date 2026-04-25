@@ -22,6 +22,25 @@ interface ResourceDraftPayload {
   tags: string;
 }
 
+const RESOURCE_SUMMARY_SELECT = `
+  id,
+  owner_github_id,
+  title,
+  url,
+  type,
+  summary,
+  created_at,
+  updated_at,
+  owner:members!resources_owner_github_id_fkey(
+    github_id,
+    github_username,
+    avatar_url,
+    field,
+    created_at,
+    updated_at
+  )
+`;
+
 function toSlug(value: string): string {
   return value
     .trim()
@@ -220,6 +239,24 @@ function mapResourceRow(
   };
 }
 
+async function hydrateResourceRows(
+  rows: Record<string, unknown>[],
+  viewerGithubId?: number
+): Promise<ResourceSummary[]> {
+  const resourceIds = rows.map((row) => row.id as string);
+  const [tagsByResource, commentCounts, bookmarkCounts, bookmarkedIds] =
+    await Promise.all([
+      fetchResourceTags(resourceIds),
+      fetchCountMap("resource_comments", "resource_id", resourceIds),
+      fetchCountMap("resource_bookmarks", "resource_id", resourceIds),
+      fetchBookmarkedIds(resourceIds, viewerGithubId),
+    ]);
+
+  return rows.map((row) =>
+    mapResourceRow(row, tagsByResource, commentCounts, bookmarkCounts, bookmarkedIds)
+  );
+}
+
 export interface RelatedResourcesPayload {
   by_owner: ResourceSummary[];
   by_tag: ResourceSummary[];
@@ -290,26 +327,7 @@ export async function listResources(filters: ResourceFilters, viewerGithubId?: n
 
   let query = getSupabase()
     .from("resources")
-    .select(
-      `
-      id,
-      owner_github_id,
-      title,
-      url,
-      type,
-      summary,
-      created_at,
-      updated_at,
-      owner:members!resources_owner_github_id_fkey(
-        github_id,
-        github_username,
-        avatar_url,
-        field,
-        created_at,
-        updated_at
-      )
-    `
-    )
+    .select(RESOURCE_SUMMARY_SELECT)
     .order("updated_at", { ascending: false });
 
   if (filters.type) {
@@ -336,18 +354,7 @@ export async function listResources(filters: ResourceFilters, viewerGithubId?: n
   }
 
   const rows = (data ?? []) as Record<string, unknown>[];
-  const resourceIds = rows.map((row) => row.id as string);
-  const [tagsByResource, commentCounts, bookmarkCounts, bookmarkedIds] =
-    await Promise.all([
-      fetchResourceTags(resourceIds),
-      fetchCountMap("resource_comments", "resource_id", resourceIds),
-      fetchCountMap("resource_bookmarks", "resource_id", resourceIds),
-      fetchBookmarkedIds(resourceIds, viewerGithubId),
-    ]);
-
-  const mapped = rows.map((row) =>
-    mapResourceRow(row, tagsByResource, commentCounts, bookmarkCounts, bookmarkedIds)
-  );
+  const mapped = await hydrateResourceRows(rows, viewerGithubId);
 
   return sortResourceSummaries(mapped, filters.sort);
 }
@@ -355,26 +362,7 @@ export async function listResources(filters: ResourceFilters, viewerGithubId?: n
 export async function getResourceById(resourceId: string, viewerGithubId?: number) {
   const { data, error } = await getSupabase()
     .from("resources")
-    .select(
-      `
-      id,
-      owner_github_id,
-      title,
-      url,
-      type,
-      summary,
-      created_at,
-      updated_at,
-      owner:members!resources_owner_github_id_fkey(
-        github_id,
-        github_username,
-        avatar_url,
-        field,
-        created_at,
-        updated_at
-      )
-    `
-    )
+    .select(RESOURCE_SUMMARY_SELECT)
     .eq("id", resourceId)
     .maybeSingle();
 
@@ -386,21 +374,11 @@ export async function getResourceById(resourceId: string, viewerGithubId?: numbe
     return null;
   }
 
-  const [tagsByResource, commentCounts, bookmarkCounts, bookmarkedIds] =
-    await Promise.all([
-      fetchResourceTags([resourceId]),
-      fetchCountMap("resource_comments", "resource_id", [resourceId]),
-      fetchCountMap("resource_bookmarks", "resource_id", [resourceId]),
-      fetchBookmarkedIds([resourceId], viewerGithubId),
-    ]);
-
-  return mapResourceRow(
-    data as Record<string, unknown>,
-    tagsByResource,
-    commentCounts,
-    bookmarkCounts,
-    bookmarkedIds
+  const [resource] = await hydrateResourceRows(
+    [data as Record<string, unknown>],
+    viewerGithubId
   );
+  return resource;
 }
 
 export async function listRelatedResources(
@@ -412,33 +390,53 @@ export async function listRelatedResources(
     return { by_owner: [], by_tag: [] };
   }
 
-  const byOwner = (
-    await listResources(
-      {
-        ownerGithubId: resource.owner.github_id,
-        sort: "latest",
-      },
-      viewerGithubId
-    )
-  )
-    .filter((item) => item.id !== resourceId)
-    .slice(0, 3);
+  const byOwnerPromise = getSupabase()
+    .from("resources")
+    .select(RESOURCE_SUMMARY_SELECT)
+    .eq("owner_github_id", resource.owner.github_id)
+    .neq("id", resourceId)
+    .order("updated_at", { ascending: false })
+    .limit(3);
 
-  const tagSlugs = resource.tags.map((tag) => tag.slug);
-  const byTagMap = new Map<string, ResourceSummary>();
+  const tagIds = resource.tags.map((tag) => tag.id);
+  const byTagPromise =
+    tagIds.length > 0
+      ? getSupabase()
+          .from("resources")
+          .select(`${RESOURCE_SUMMARY_SELECT}, resource_tags!inner(tag_id)`)
+          .in("resource_tags.tag_id", tagIds)
+          .neq("id", resourceId)
+          .order("updated_at", { ascending: false })
+          .limit(3)
+      : Promise.resolve({ data: [], error: null });
 
-  for (const tag of tagSlugs) {
-    const resources = await listResources({ tag, sort: "latest" }, viewerGithubId);
-    for (const item of resources) {
-      if (item.id !== resourceId && !byTagMap.has(item.id)) {
-        byTagMap.set(item.id, item);
-      }
-    }
+  const [byOwnerResult, byTagResult] = await Promise.all([
+    byOwnerPromise,
+    byTagPromise,
+  ]);
+
+  if (byOwnerResult.error) {
+    throw new Error(byOwnerResult.error.message);
   }
 
+  if (byTagResult.error) {
+    throw new Error(byTagResult.error.message);
+  }
+
+  const [byOwner, byTag] = await Promise.all([
+    hydrateResourceRows(
+      (byOwnerResult.data ?? []) as Record<string, unknown>[],
+      viewerGithubId
+    ),
+    hydrateResourceRows(
+      (byTagResult.data ?? []) as Record<string, unknown>[],
+      viewerGithubId
+    ),
+  ]);
+
   return {
-    by_owner: byOwner,
-    by_tag: sortResourceSummaries([...byTagMap.values()], "latest").slice(0, 3),
+    by_owner: sortResourceSummaries(byOwner, "latest").slice(0, 3),
+    by_tag: sortResourceSummaries(byTag, "latest").slice(0, 3),
   };
 }
 
